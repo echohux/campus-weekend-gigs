@@ -166,33 +166,57 @@ function JobDetail({ job, verified, applied, onApply }) {
 
 const JOB_TYPES = ['全部类型', '餐饮服务', '活动协助', '门店整理', '促销派单'];
 const JOB_DAYS = ['本周末', '周六', '周日'];
+const DISTANCES = ['不限距离', '1公里内', '3公里内', '5公里内'];
+const SORTS = ['距离优先', '薪资从高到低', '薪资从低到高'];
+const distanceLimit = { '不限距离': Infinity, '1公里内': 1, '3公里内': 3, '5公里内': 5 };
+
+function FilterDropdown({ icon: Icon, value, options, onChange, active }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  return <div className="filter-dd" ref={ref}>
+    <button type="button" className={active ? 'active' : ''} aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(o=>!o)}><Icon/>{value}<ChevronDown/></button>
+    {open && <ul className="filter-menu" role="listbox">
+      {options.map(opt => <li key={opt} role="option" aria-selected={opt===value} className={opt===value?'selected':''} onClick={()=>{ onChange(opt); setOpen(false); }}>{opt}{opt===value && <Check size={15}/>}</li>)}
+    </ul>}
+  </div>;
+}
 
 function StudentHome({ state, update, setPage }) {
   const [selected, setSelected] = useState(seedJobs[0]);
   const [query, setQuery] = useState('');
   const [day, setDay] = useState('本周末');
+  const [distance, setDistance] = useState('不限距离');
+  const [sort, setSort] = useState('距离优先');
   const [type, setType] = useState('全部类型');
-  const [nearby, setNearby] = useState(false);
-  const [sortByPay, setSortByPay] = useState(false);
 
   const jobs = useMemo(() => {
     let list = seedJobs.filter(j => (j.title + j.merchant).includes(query));
     if (day !== '本周末') list = list.filter(j => j.day === day);
     if (type !== '全部类型') list = list.filter(j => j.type === type);
-    if (nearby) list = list.filter(j => j.distanceKm <= 3);
-    return [...list].sort((a, b) => sortByPay ? b.pay - a.pay : a.distanceKm - b.distanceKm);
-  }, [query, day, type, nearby, sortByPay]);
+    const lim = distanceLimit[distance];
+    if (lim !== Infinity) list = list.filter(j => j.distanceKm <= lim);
+    return [...list].sort((a, b) => {
+      if (sort === '薪资从高到低') return b.pay - a.pay;
+      if (sort === '薪资从低到高') return a.pay - b.pay;
+      return a.distanceKm - b.distanceKm;
+    });
+  }, [query, day, distance, sort, type]);
 
-  const cycle = (list, cur, set) => () => set(list[(list.indexOf(cur) + 1) % list.length]);
   const applied = state.applications.includes(selected.id);
   return <>
-    <div className="page-heading"><span>你好，林同学</span><h1>这个周末，找份离你更近的工作</h1></div>
+    <div className="page-heading"><span>你好，同学</span><h1>这个周末，找份离你更近的工作</h1></div>
     <div className="search-box"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} aria-label="搜索岗位或商家" placeholder="搜索岗位或商家"/></div>
     <div className="filters">
-      <button className={day!=='本周末'?'active':''} onClick={cycle(JOB_DAYS, day, setDay)}><CalendarDays/>{day}<ChevronDown/></button>
-      <button className={nearby?'active':''} aria-pressed={nearby} onClick={()=>setNearby(v=>!v)}><MapPin/>3公里内<Check size={14} style={{opacity:nearby?1:0}}/></button>
-      <button className={sortByPay?'active':''} aria-pressed={sortByPay} onClick={()=>setSortByPay(v=>!v)}><WalletCards/>{sortByPay?'薪资从高到低':'距离优先'}<ChevronDown/></button>
-      <button className={type!=='全部类型'?'active':''} onClick={cycle(JOB_TYPES, type, setType)}><LayoutList/>{type}<ChevronDown/></button>
+      <FilterDropdown icon={CalendarDays} value={day} options={JOB_DAYS} onChange={setDay} active={day!=='本周末'}/>
+      <FilterDropdown icon={MapPin} value={distance} options={DISTANCES} onChange={setDistance} active={distance!=='不限距离'}/>
+      <FilterDropdown icon={WalletCards} value={sort} options={SORTS} onChange={setSort} active={sort!=='距离优先'}/>
+      <FilterDropdown icon={LayoutList} value={type} options={JOB_TYPES} onChange={setType} active={type!=='全部类型'}/>
     </div>
     <Notice verified={state.verified} role="student" onVerify={()=>setPage('verify')}/>
     <div className="student-grid"><section className="job-list" aria-label="兼职列表">{jobs.map(j=><JobRow key={j.id} job={j} active={selected.id===j.id} onSelect={()=>setSelected(j)}/>)}{!jobs.length&&<div className="empty"><Search/><h2>没有找到相关岗位</h2><p>换个关键词或筛选条件试试看。</p></div>}</section><JobDetail job={selected} verified={state.verified} applied={applied} onApply={()=>update(s=>({...s,applications:[...s.applications,selected.id]}))}/></div>
