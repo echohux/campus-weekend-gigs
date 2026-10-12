@@ -12,3 +12,4 @@
 .profile-avatar{width:52px;height:52px;flex:none;border-radius:50%;background:var(--green-soft);color:var(--green-dark);display:grid;place-items:center}
 .profile-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
 .profile-list button{width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:12px;background:#fff;font-weight:650}.profile-list button:hover{border-color:#9cafc5}.profile-list button>span{flex:1;text-align:left}.profile-list button>small{color:var(--muted);font-weight:600}
+.application-row.applicant{align-items:center;gap:14px}.application-row.applicant .profile-avatar{width:44px;height:44px}.applicant-main{flex:1;display:flex;flex-direction:column;gap:2px}.applicant-main small{color:var(--muted)}.applicant-actions{display:flex;gap:8px;flex:none}.applicant-actions .primary,.applicant-actions .secondary{min-height:40px;padding:0 16px}

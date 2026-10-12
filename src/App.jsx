@@ -249,25 +249,69 @@ function Applications({ state }) {
   return <section><div className="page-heading"><span>我的申请</span><h1>跟进每一次申请</h1></div>{jobs.length?<div className="application-list">{jobs.map(j=><div className="application-row" key={j.id}><img src={asset(j.image)} alt=""/><span><strong>{j.title}</strong><small>{j.merchant} · {j.time}</small></span><Status tone="amber">等待商家确认</Status></div>)}</div>:<div className="empty"><FileText/><h2>还没有申请记录</h2><p>完成身份认证后，去发现合适的周末工作。</p></div>}</section>;
 }
 
-function PublishDrawer({ onClose, onSave }) {
+function PublishDrawer({ onClose, onSave, initial, title = '发布新岗位' }) {
+  const v = initial || {};
   const submit = e => { e.preventDefault(); const data = new FormData(e.currentTarget); onSave(Object.fromEntries(data)); };
-  return <div className="drawer-backdrop" role="presentation" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="publish-title"><header><h2 id="publish-title">发布新岗位</h2><button onClick={onClose} aria-label="关闭"><X/></button></header><form onSubmit={submit}>
-    <label>岗位名称<input name="title" required defaultValue="咖啡店周末店员"/></label><label>工作类型<select name="type" defaultValue="餐饮服务"><option>餐饮服务</option><option>活动协助</option><option>门店整理</option></select></label>
-    <label>工作日期<input name="date" type="date" required defaultValue="2026-10-17"/></label><div className="form-grid"><label>开始时间<input name="start" type="time" defaultValue="10:00"/></label><label>结束时间<input name="end" type="time" defaultValue="18:00"/></label><label>时薪<input name="pay" type="number" defaultValue="22"/></label><label>招聘人数<input name="slots" type="number" defaultValue="4"/></label></div>
-    <label>工作地址<input name="address" defaultValue="大学城文汇路 88 号"/></label><label>岗位描述<textarea name="description" rows="4" defaultValue="负责门店日常协助、顾客接待与环境整理。"/></label><label>任职要求<textarea name="requirements" rows="3" defaultValue="年满 18 周岁，周末可到岗，认真负责。"/></label>
-    <footer><button type="button" className="secondary" onClick={onClose}>保存草稿</button><button className="primary" type="submit">发布岗位</button></footer>
+  return <div className="drawer-backdrop" role="presentation" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="publish-title"><header><h2 id="publish-title">{title}</h2><button onClick={onClose} aria-label="关闭"><X/></button></header><form onSubmit={submit}>
+    <label>岗位名称<input name="title" required defaultValue={v.title ?? '咖啡店周末店员'}/></label><label>工作类型<select name="type" defaultValue={v.type ?? '餐饮服务'}><option>餐饮服务</option><option>活动协助</option><option>门店整理</option><option>促销派单</option></select></label>
+    <label>工作日期<input name="date" type="date" required defaultValue={v.date ?? '2026-10-17'}/></label><div className="form-grid"><label>开始时间<input name="start" type="time" defaultValue={v.start ?? '10:00'}/></label><label>结束时间<input name="end" type="time" defaultValue={v.end ?? '18:00'}/></label><label>时薪<input name="pay" type="number" defaultValue={v.pay ?? 22}/></label><label>招聘人数<input name="slots" type="number" defaultValue={v.slots ?? 4}/></label></div>
+    <label>工作地址<input name="address" defaultValue={v.address ?? '大学城文汇路 88 号'}/></label><label>岗位描述<textarea name="description" rows="4" defaultValue={v.description ?? '负责门店日常协助、顾客接待与环境整理。'}/></label><label>任职要求<textarea name="requirements" rows="3" defaultValue={v.requirements ?? '年满 18 周岁，周末可到岗，认真负责。'}/></label>
+    <footer><button type="button" className="secondary" onClick={onClose}>取消</button><button className="primary" type="submit">{initial ? '保存修改' : '发布岗位'}</button></footer>
   </form></aside></div>;
 }
 
+const MERCHANT_TABS = ['招聘中', '草稿', '已结束'];
+const baseMerchantJobs = [
+  { title:'咖啡店周末店员', time:'周六 10:00–18:00', pay:22, hired:'2/4 已录用', applicants:'6 人申请', status:'招聘中', _idx:-1 },
+  { title:'国庆市集临时工', time:'周日 09:00–17:00', pay:25, hired:'0/6 已录用', applicants:'草稿未发布', status:'草稿', _idx:-1 },
+  { title:'中秋门店促销', time:'已于上周结束', pay:20, hired:'4/4 已录用', applicants:'已完成', status:'已结束', _idx:-1 },
+];
+
 function MerchantHome({ state, update, setPage }) {
   const [drawer, setDrawer] = useState(false);
+  const [editing, setEditing] = useState(null); // { job, index }
+  const [tab, setTab] = useState('招聘中');
   const verified = state.merchantStatus === 'verified';
-  const jobs = [{ title:'咖啡店周末店员', time:'周六 10:00–18:00', pay:22, hired:'2/4 已录用', applicants:'6 人申请' }, ...state.merchantJobs];
-  const saveJob = data => { update(s=>({...s,merchantJobs:[...s.merchantJobs,{...data,hired:'0/'+data.slots+' 已录用',applicants:'0 人申请'}]})); setDrawer(false); };
-  return <><Notice verified={verified} role="merchant" onVerify={()=>setPage('verify')}/><div className="merchant-heading"><div className="page-heading"><span>下午好，陈店长</span><h1>周末用工，一处安排</h1><p>轻松发布周末岗位，快速找到合适的搭子。</p></div><button className="primary" disabled={!verified} onClick={()=>setDrawer(true)}>发布新岗位</button></div>
-    <div className="tabs"><button className="active">招聘中 <span>{jobs.length}</span></button><button>草稿 <span>0</span></button><button>已结束 <span>0</span></button></div>
-    <div className="merchant-jobs">{jobs.map((j,i)=><article key={i}><header><h2>{j.title}</h2><Status>招聘中</Status></header><div className="merchant-meta"><span><CalendarDays/> {j.time||j.date}</span><span><WalletCards/> ¥{j.pay}/小时</span><span><UsersRound/> {j.hired}</span><span><FileText/> {j.applicants}</span></div><footer><button className="secondary">查看申请者</button><button className="secondary">编辑岗位</button></footer></article>)}</div>
-    {drawer&&<PublishDrawer onClose={()=>setDrawer(false)} onSave={saveJob}/>}</>;
+  const jobs = [...baseMerchantJobs, ...state.merchantJobs.map((j, i) => ({ ...j, status:'招聘中', _idx:i }))];
+  const counts = MERCHANT_TABS.reduce((m, t) => ({ ...m, [t]: jobs.filter(j => j.status === t).length }), {});
+  const shown = jobs.filter(j => j.status === tab);
+  const openEdit = job => { setEditing({ job, index: job._idx }); setDrawer(true); };
+  const saveJob = data => {
+    update(s => {
+      if (editing && editing.index >= 0) {
+        const copy = [...s.merchantJobs];
+        copy[editing.index] = { ...copy[editing.index], ...data };
+        return { ...s, merchantJobs: copy };
+      }
+      if (editing) return s; // 编辑的是示例岗位，演示环境不持久化
+      return { ...s, merchantJobs: [...s.merchantJobs, { ...data, hired:'0/'+data.slots+' 已录用', applicants:'0 人申请' }] };
+    });
+    setDrawer(false); setEditing(null);
+  };
+  return <><Notice verified={verified} role="merchant" onVerify={()=>setPage('verify')}/><div className="merchant-heading"><div className="page-heading"><span>下午好，陈店长</span><h1>周末用工，一处安排</h1><p>轻松发布周末岗位，快速找到合适的搭子。</p></div><button className="primary" disabled={!verified} onClick={()=>{setEditing(null);setDrawer(true);}}>发布新岗位</button></div>
+    <div className="tabs">{MERCHANT_TABS.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>setTab(t)}>{t} <span>{counts[t]}</span></button>)}</div>
+    <div className="merchant-jobs">{shown.length ? shown.map((j,i)=><article key={i}><header><h2>{j.title}</h2><Status tone={j.status==='招聘中'?'green':'amber'}>{j.status}</Status></header><div className="merchant-meta"><span><CalendarDays/> {j.time||j.date}</span><span><WalletCards/> ¥{j.pay}/小时</span><span><UsersRound/> {j.hired}</span><span><FileText/> {j.applicants}</span></div><footer><button className="secondary" onClick={()=>setPage('applicants')}>查看申请者</button><button className="secondary" onClick={()=>openEdit(j)}>编辑岗位</button></footer></article>) : <div className="empty"><BriefcaseBusiness/><h2>这里还没有岗位</h2><p>切换其它标签，或点击右上角发布新岗位。</p></div>}</div>
+    {drawer&&<PublishDrawer initial={editing?.job} title={editing?'编辑岗位':'发布新岗位'} onClose={()=>{setDrawer(false);setEditing(null);}} onSave={saveJob}/>}</>;
+}
+
+const seedApplicants = [
+  { id:1, name:'林小满', school:'海城大学 · 会展经济', job:'咖啡店周末店员', note:'有两次咖啡店兼职经验' },
+  { id:2, name:'赵之航', school:'海城大学 · 市场营销', job:'展会活动协助', note:'周末全天可到岗' },
+  { id:3, name:'周可欣', school:'海城职院 · 学前教育', job:'书店整理员', note:'细心耐心，喜欢阅读' },
+];
+
+function Applicants() {
+  const [list, setList] = useState(seedApplicants.map(a => ({ ...a, status:'待确认' })));
+  const setStatus = (id, status) => setList(l => l.map(a => a.id === id ? { ...a, status } : a));
+  return <section><div className="page-heading"><span>申请者</span><h1>查看并确认报名</h1></div>
+    <div className="application-list">{list.map(a=><div className="application-row applicant" key={a.id}>
+      <span className="profile-avatar"><CircleUserRound size={26}/></span>
+      <span className="applicant-main"><strong>{a.name}</strong><small>{a.school}</small><small>报名：{a.job} · {a.note}</small></span>
+      {a.status==='待确认'
+        ? <span className="applicant-actions"><button className="secondary" onClick={()=>setStatus(a.id,'已拒绝')}>拒绝</button><button className="primary" onClick={()=>setStatus(a.id,'已录用')}>录用</button></span>
+        : <Status tone={a.status==='已录用'?'green':'amber'}>{a.status}</Status>}
+    </div>)}</div>
+  </section>;
 }
 
 function Profile({ role, state, setPage, onLogout }) {
@@ -298,7 +342,7 @@ function AuthedApp({ session, onLogout }) {
   const update = fn => setState(fn);
   const role = session.role;
   return <Shell role={role} page={page} setPage={setPage} onLogout={onLogout}>
-    {role==='student' ? (page==='jobs'?<StudentHome state={state} update={update} setPage={setPage}/>:page==='applications'?<Applications state={state}/>:page==='verify'?<Verification role="student" state={state} update={update}/>:page==='profile'?<Profile role="student" state={state} setPage={setPage} onLogout={onLogout}/>:<StudentHome state={state} update={update} setPage={setPage}/>) : (page==='jobs'?<MerchantHome state={state} update={update} setPage={setPage}/>:page==='verify'?<Verification role="merchant" state={state} update={update}/>:<Applications state={{applications:[]}}/>)}
+    {role==='student' ? (page==='jobs'?<StudentHome state={state} update={update} setPage={setPage}/>:page==='applications'?<Applications state={state}/>:page==='verify'?<Verification role="student" state={state} update={update}/>:page==='profile'?<Profile role="student" state={state} setPage={setPage} onLogout={onLogout}/>:<StudentHome state={state} update={update} setPage={setPage}/>) : (page==='jobs'?<MerchantHome state={state} update={update} setPage={setPage}/>:page==='verify'?<Verification role="merchant" state={state} update={update}/>:page==='applicants'?<Applicants/>:<MerchantHome state={state} update={update} setPage={setPage}/>)}
   </Shell>;
 }
 
