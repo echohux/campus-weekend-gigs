@@ -27,6 +27,9 @@ function readErr(e, fallback) {
   return e?.error_description || e?.message || e?.msg || fallback;
 }
 
+// 把相对资源路径拼上部署基路径，兼容 GitHub Pages 子路径（/campus-weekend-gigs/）
+const asset = p => import.meta.env.BASE_URL + p;
+
 function Brand() {
   return <div className="brand"><span className="brand-mark"><HeartHandshake size={26}/></span><span>周末搭子</span></div>;
 }
@@ -143,14 +146,14 @@ function Notice({ verified, role, onVerify }) {
 
 function JobRow({ job, active, onSelect }) {
   return <button className={`job-row ${active?'active':''}`} onClick={onSelect}>
-    <img src={job.image} alt="" width="112" height="84"/>
+    <img src={asset(job.image)} alt="" width="112" height="84"/>
     <span className="job-main"><span className="job-heading"><strong>{job.title}</strong><ChevronRight size={19}/></span><span>{job.merchant} <Status>商家已认证</Status></span><span className="job-meta"><span><CalendarDays/> {job.time}</span><span><MapPin/> {job.distance}</span><span><WalletCards/> ¥{job.pay}/小时</span><span><UsersRound/> 剩余 {job.slots} 人</span></span></span>
   </button>;
 }
 
 function JobDetail({ job, verified, applied, onApply }) {
   return <aside className="detail-panel">
-    <img className="detail-image" src={job.image} alt={`${job.merchant}工作环境`} />
+    <img className="detail-image" src={asset(job.image)} alt={`${job.merchant}工作环境`} />
     <div className="detail-body"><div className="title-line"><h2>{job.title}</h2><Status>商家已认证</Status></div><p>{job.merchant} · {job.distance}</p>
       <div className="pay-line"><strong>¥{job.pay}/小时</strong><span>剩余 {job.slots} 人</span></div>
       <div className="detail-facts"><span><CalendarDays/> {job.time}</span><span><MapPin/> {job.address}</span></div>
@@ -161,17 +164,38 @@ function JobDetail({ job, verified, applied, onApply }) {
   </aside>;
 }
 
+const JOB_TYPES = ['全部类型', '餐饮服务', '活动协助', '门店整理', '促销派单'];
+const JOB_DAYS = ['本周末', '周六', '周日'];
+
 function StudentHome({ state, update, setPage }) {
   const [selected, setSelected] = useState(seedJobs[0]);
   const [query, setQuery] = useState('');
-  const jobs = useMemo(()=>seedJobs.filter(j=>(j.title+j.merchant).includes(query)),[query]);
+  const [day, setDay] = useState('本周末');
+  const [type, setType] = useState('全部类型');
+  const [nearby, setNearby] = useState(false);
+  const [sortByPay, setSortByPay] = useState(false);
+
+  const jobs = useMemo(() => {
+    let list = seedJobs.filter(j => (j.title + j.merchant).includes(query));
+    if (day !== '本周末') list = list.filter(j => j.day === day);
+    if (type !== '全部类型') list = list.filter(j => j.type === type);
+    if (nearby) list = list.filter(j => j.distanceKm <= 3);
+    return [...list].sort((a, b) => sortByPay ? b.pay - a.pay : a.distanceKm - b.distanceKm);
+  }, [query, day, type, nearby, sortByPay]);
+
+  const cycle = (list, cur, set) => () => set(list[(list.indexOf(cur) + 1) % list.length]);
   const applied = state.applications.includes(selected.id);
   return <>
     <div className="page-heading"><span>你好，林同学</span><h1>这个周末，找份离你更近的工作</h1></div>
     <div className="search-box"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} aria-label="搜索岗位或商家" placeholder="搜索岗位或商家"/></div>
-    <div className="filters"><button><CalendarDays/>本周末<ChevronDown/></button><button><MapPin/>3公里内<ChevronDown/></button><button><WalletCards/>薪资从高到低<ChevronDown/></button><button><LayoutList/>全部类型<ChevronDown/></button></div>
+    <div className="filters">
+      <button className={day!=='本周末'?'active':''} onClick={cycle(JOB_DAYS, day, setDay)}><CalendarDays/>{day}<ChevronDown/></button>
+      <button className={nearby?'active':''} aria-pressed={nearby} onClick={()=>setNearby(v=>!v)}><MapPin/>3公里内<Check size={14} style={{opacity:nearby?1:0}}/></button>
+      <button className={sortByPay?'active':''} aria-pressed={sortByPay} onClick={()=>setSortByPay(v=>!v)}><WalletCards/>{sortByPay?'薪资从高到低':'距离优先'}<ChevronDown/></button>
+      <button className={type!=='全部类型'?'active':''} onClick={cycle(JOB_TYPES, type, setType)}><LayoutList/>{type}<ChevronDown/></button>
+    </div>
     <Notice verified={state.verified} role="student" onVerify={()=>setPage('verify')}/>
-    <div className="student-grid"><section className="job-list" aria-label="兼职列表">{jobs.map(j=><JobRow key={j.id} job={j} active={selected.id===j.id} onSelect={()=>setSelected(j)}/>)}{!jobs.length&&<div className="empty"><Search/><h2>没有找到相关岗位</h2><p>换个关键词试试看。</p></div>}</section><JobDetail job={selected} verified={state.verified} applied={applied} onApply={()=>update(s=>({...s,applications:[...s.applications,selected.id]}))}/></div>
+    <div className="student-grid"><section className="job-list" aria-label="兼职列表">{jobs.map(j=><JobRow key={j.id} job={j} active={selected.id===j.id} onSelect={()=>setSelected(j)}/>)}{!jobs.length&&<div className="empty"><Search/><h2>没有找到相关岗位</h2><p>换个关键词或筛选条件试试看。</p></div>}</section><JobDetail job={selected} verified={state.verified} applied={applied} onApply={()=>update(s=>({...s,applications:[...s.applications,selected.id]}))}/></div>
   </>;
 }
 
@@ -198,7 +222,7 @@ function Verification({ role, state, update }) {
 
 function Applications({ state }) {
   const jobs = seedJobs.filter(j=>state.applications.includes(j.id));
-  return <section><div className="page-heading"><span>我的申请</span><h1>跟进每一次申请</h1></div>{jobs.length?<div className="application-list">{jobs.map(j=><div className="application-row" key={j.id}><img src={j.image} alt=""/><span><strong>{j.title}</strong><small>{j.merchant} · {j.time}</small></span><Status tone="amber">等待商家确认</Status></div>)}</div>:<div className="empty"><FileText/><h2>还没有申请记录</h2><p>完成身份认证后，去发现合适的周末工作。</p></div>}</section>;
+  return <section><div className="page-heading"><span>我的申请</span><h1>跟进每一次申请</h1></div>{jobs.length?<div className="application-list">{jobs.map(j=><div className="application-row" key={j.id}><img src={asset(j.image)} alt=""/><span><strong>{j.title}</strong><small>{j.merchant} · {j.time}</small></span><Status tone="amber">等待商家确认</Status></div>)}</div>:<div className="empty"><FileText/><h2>还没有申请记录</h2><p>完成身份认证后，去发现合适的周末工作。</p></div>}</section>;
 }
 
 function PublishDrawer({ onClose, onSave }) {
