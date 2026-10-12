@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, Bell, BookOpen, BriefcaseBusiness, Building2, CalendarDays, Check,
   ChevronDown, ChevronRight, CircleUserRound, Clock3, FileCheck2, FileText,
@@ -6,17 +6,25 @@ import {
   Store, Upload, UsersRound, WalletCards, X
 } from 'lucide-react';
 import { seedJobs } from './data/jobs';
+import { sendCode, loginOrRegister, logout, getCurrentUser } from './cloudbase';
 
-const STORAGE_KEY = 'weekend-buddy-mvp-v1';
-const defaults = { loggedIn: false, role: 'student', verified: false, applications: [], merchantStatus: 'pending', merchantJobs: [] };
+const defaults = { verified: false, applications: [], merchantStatus: 'pending', merchantJobs: [] };
+const roleKey = uid => `wb-role:${uid}`;
+const stateKey = uid => `weekend-buddy:${uid}`;
 
-function usePersistedState() {
+// 业务数据按登录用户 uid 隔离存储（登录态本身由 CloudBase 维护）
+function usePersistedState(uid) {
   const [state, setState] = useState(() => {
-    try { return { ...defaults, ...JSON.parse(localStorage.getItem(STORAGE_KEY)) }; }
+    try { return { ...defaults, ...JSON.parse(localStorage.getItem(stateKey(uid))) }; }
     catch { return defaults; }
   });
-  useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)), [state]);
+  useEffect(() => localStorage.setItem(stateKey(uid), JSON.stringify(state)), [uid, state]);
   return [state, setState];
+}
+
+// 从 SDK 抛出的错误里尽量取到可读信息
+function readErr(e, fallback) {
+  return e?.error_description || e?.message || e?.msg || fallback;
 }
 
 function Brand() {
@@ -27,16 +35,60 @@ function Status({ children, tone = 'green' }) {
   return <span className={`status status-${tone}`}><Check size={13}/>{children}</span>;
 }
 
-function Login({ onLogin }) {
+function Login({ onAuthed }) {
   const [role, setRole] = useState('student');
-  const [account, setAccount] = useState('');
+  const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
-  const submit = (event) => {
-    event.preventDefault();
-    if (!account.trim() || !code.trim()) { setError('请输入账号和任意 4 位演示验证码'); return; }
-    onLogin(role);
+  const [sending, setSending] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const verificationRef = useRef(null);
+
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const t = setTimeout(() => setCooldown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const handleSend = async () => {
+    setError('');
+    if (!emailValid) { setError('请输入正确的邮箱地址'); return; }
+    setSending(true);
+    try {
+      verificationRef.current = await sendCode(email.trim());
+      setCooldown(60); // 避免频繁发送
+    } catch (e) {
+      setError(readErr(e, '验证码发送失败，请稍后再试'));
+    } finally {
+      setSending(false);
+    }
   };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError('');
+    if (!emailValid) { setError('请输入正确的邮箱地址'); return; }
+    if (!code.trim()) { setError('请输入收到的邮箱验证码'); return; }
+    if (!verificationRef.current) { setError('请先点击「获取验证码」'); return; }
+    setSubmitting(true);
+    try {
+      const { uid, isNewUser } = await loginOrRegister({
+        email: email.trim(), code: code.trim(), verification: verificationRef.current,
+      });
+      let finalRole = role;
+      if (isNewUser) localStorage.setItem(roleKey(uid), role);
+      else finalRole = localStorage.getItem(roleKey(uid)) || role;
+      onAuthed({ uid, role: finalRole });
+    } catch (e) {
+      setError(readErr(e, '登录失败，请检查验证码是否正确'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return <main className="login-shell">
     <header className="login-header"><Brand/><nav><a href="#about">关于平台</a><a href="#safety">安全说明</a></nav></header>
     <section className="login-layout">
@@ -45,18 +97,18 @@ function Login({ onLogin }) {
         <h1>登录你的周末计划</h1>
         <p className="lead">认证学生和真实商家，在更近的地方找到更合适的周末安排。</p>
         <form onSubmit={submit} noValidate>
-          <label htmlFor="account">手机号或邮箱</label>
-          <input id="account" value={account} onChange={e=>setAccount(e.target.value)} placeholder="请输入手机号或邮箱" autoComplete="username" />
+          <label htmlFor="account">邮箱</label>
+          <input id="account" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="请输入邮箱地址" autoComplete="email" />
           <label htmlFor="code">验证码</label>
-          <div className="input-action"><input id="code" value={code} onChange={e=>setCode(e.target.value)} placeholder="输入任意 4 位数字" inputMode="numeric"/><button type="button">获取验证码</button></div>
+          <div className="input-action"><input id="code" value={code} onChange={e=>setCode(e.target.value)} placeholder="输入邮箱验证码" inputMode="numeric" autoComplete="one-time-code"/><button type="button" onClick={handleSend} disabled={sending || cooldown>0}>{cooldown>0 ? `${cooldown}s 后重发` : sending ? '发送中…' : '获取验证码'}</button></div>
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="role-label">首次使用？请选择你的身份</div>
           <div className="role-grid">
             <button className={`role-card ${role==='student'?'selected':''}`} type="button" onClick={()=>setRole('student')} aria-pressed={role==='student'}><GraduationCap/><span><strong>我是学生</strong><small>寻找周末兼职</small></span>{role==='student'&&<Check className="selected-check"/>}</button>
             <button className={`role-card ${role==='merchant'?'selected':''}`} type="button" onClick={()=>setRole('merchant')} aria-pressed={role==='merchant'}><Store/><span><strong>我是商家</strong><small>发布短期工作</small></span>{role==='merchant'&&<Check className="selected-check"/>}</button>
           </div>
-          <p className="role-note"><ShieldCheck size={16}/> 身份稍后不可直接切换</p>
-          <button className="primary full" type="submit">登录 / 注册</button>
+          <p className="role-note"><ShieldCheck size={16}/> 身份仅在首次注册时生效，稍后不可直接切换</p>
+          <button className="primary full" type="submit" disabled={submitting}>{submitting ? '处理中…' : '登录 / 注册'}</button>
         </form>
       </div>
       <div className="route-art" aria-hidden="true">
@@ -170,12 +222,29 @@ function MerchantHome({ state, update, setPage }) {
     {drawer&&<PublishDrawer onClose={()=>setDrawer(false)} onSave={saveJob}/>}</>;
 }
 
-export default function App() {
-  const [state, setState] = usePersistedState();
+function AuthedApp({ session, onLogout }) {
+  const [state, setState] = usePersistedState(session.uid);
   const [page, setPage] = useState('jobs');
   const update = fn => setState(fn);
-  if (!state.loggedIn) return <Login onLogin={role=>setState({...defaults,loggedIn:true,role,merchantStatus:role==='merchant'?'pending':'pending'})}/>;
-  return <Shell role={state.role} page={page} setPage={setPage} onLogout={()=>setState({...defaults})}>
-    {state.role==='student' ? (page==='jobs'?<StudentHome state={state} update={update} setPage={setPage}/>:page==='applications'?<Applications state={state}/>:page==='verify'?<Verification role="student" state={state} update={update}/>:<Verification role="student" state={state} update={update}/>) : (page==='jobs'?<MerchantHome state={state} update={update} setPage={setPage}/>:page==='verify'?<Verification role="merchant" state={state} update={update}/>:<Applications state={{applications:[]}}/>)}
+  const role = session.role;
+  return <Shell role={role} page={page} setPage={setPage} onLogout={onLogout}>
+    {role==='student' ? (page==='jobs'?<StudentHome state={state} update={update} setPage={setPage}/>:page==='applications'?<Applications state={state}/>:page==='verify'?<Verification role="student" state={state} update={update}/>:<Verification role="student" state={state} update={update}/>) : (page==='jobs'?<MerchantHome state={state} update={update} setPage={setPage}/>:page==='verify'?<Verification role="merchant" state={state} update={update}/>:<Applications state={{applications:[]}}/>)}
   </Shell>;
+}
+
+export default function App() {
+  // 启动时读取 CloudBase 登录态；已登录则直接进入应用
+  const [session, setSession] = useState(() => {
+    const u = getCurrentUser();
+    if (!u) return null;
+    return { uid: u.uid, role: localStorage.getItem(roleKey(u.uid)) || 'student' };
+  });
+
+  const handleLogout = async () => {
+    await logout();
+    setSession(null);
+  };
+
+  if (!session) return <Login onAuthed={setSession}/>;
+  return <AuthedApp session={session} onLogout={handleLogout}/>;
 }
