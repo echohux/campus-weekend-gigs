@@ -263,8 +263,13 @@ function PublishDrawer({ onClose, onSave, initial, title = '发布新岗位' }) 
 const MERCHANT_TABS = ['招聘中', '草稿', '已结束'];
 const baseMerchantJobs = [
   { title:'咖啡店周末店员', time:'周六 10:00–18:00', pay:22, hired:'2/4 已录用', applicants:'6 人申请', status:'招聘中', _idx:-1 },
+  { title:'奶茶店周末兼职', time:'周日 12:00–20:00', pay:23, hired:'1/3 已录用', applicants:'4 人申请', status:'招聘中', _idx:-1 },
+  { title:'书展现场引导', time:'周六 09:00–17:00', pay:24, hired:'3/8 已录用', applicants:'9 人申请', status:'招聘中', _idx:-1 },
+  { title:'周末外卖打包员', time:'周日 11:00–14:00', pay:21, hired:'0/2 已录用', applicants:'3 人申请', status:'招聘中', _idx:-1 },
   { title:'国庆市集临时工', time:'周日 09:00–17:00', pay:25, hired:'0/6 已录用', applicants:'草稿未发布', status:'草稿', _idx:-1 },
+  { title:'门店盘点助理', time:'周六 18:00–21:00', pay:19, hired:'0/3 已录用', applicants:'草稿未发布', status:'草稿', _idx:-1 },
   { title:'中秋门店促销', time:'已于上周结束', pay:20, hired:'4/4 已录用', applicants:'已完成', status:'已结束', _idx:-1 },
+  { title:'迎新季传单派发', time:'已于两周前结束', pay:21, hired:'6/6 已录用', applicants:'已完成', status:'已结束', _idx:-1 },
 ];
 
 function MerchantHome({ state, update, setPage }) {
@@ -295,13 +300,17 @@ function MerchantHome({ state, update, setPage }) {
 }
 
 const seedApplicants = [
-  { id:1, name:'林小满', school:'海城大学 · 会展经济', job:'咖啡店周末店员', note:'有两次咖啡店兼职经验' },
-  { id:2, name:'赵之航', school:'海城大学 · 市场营销', job:'展会活动协助', note:'周末全天可到岗' },
-  { id:3, name:'周可欣', school:'海城职院 · 学前教育', job:'书店整理员', note:'细心耐心，喜欢阅读' },
+  { id:1, name:'林小满', school:'海城大学 · 会展经济', job:'咖啡店周末店员', note:'有两次咖啡店兼职经验', status:'待确认' },
+  { id:2, name:'赵之航', school:'海城大学 · 市场营销', job:'展会活动协助', note:'周末全天可到岗', status:'待确认' },
+  { id:3, name:'周可欣', school:'海城职院 · 学前教育', job:'书店整理员', note:'细心耐心，喜欢阅读', status:'待确认' },
+  { id:4, name:'吴鸿博', school:'海城大学 · 计算机', job:'书展现场引导', note:'做过展会志愿者', status:'待确认' },
+  { id:5, name:'钱思彤', school:'海城师范 · 汉语言', job:'奶茶店周末兼职', note:'手脚麻利，能排早班', status:'待确认' },
+  { id:6, name:'孙佳一', school:'海城职院 · 市场营销', job:'周末外卖打包员', note:'住校，离店近', status:'已录用' },
+  { id:7, name:'郑雨桐', school:'海城大学 · 工商管理', job:'咖啡店周末店员', note:'仅周日有空', status:'已拒绝' },
 ];
 
 function Applicants() {
-  const [list, setList] = useState(seedApplicants.map(a => ({ ...a, status:'待确认' })));
+  const [list, setList] = useState(seedApplicants.map(a => ({ ...a })));
   const setStatus = (id, status) => setList(l => l.map(a => a.id === id ? { ...a, status } : a));
   return <section><div className="page-heading"><span>申请者</span><h1>查看并确认报名</h1></div>
     <div className="application-list">{list.map(a=><div className="application-row applicant" key={a.id}>
