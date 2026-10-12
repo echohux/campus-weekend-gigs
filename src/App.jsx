@@ -270,13 +270,35 @@ function MerchantHome({ state, update, setPage }) {
     {drawer&&<PublishDrawer onClose={()=>setDrawer(false)} onSave={saveJob}/>}</>;
 }
 
+function Profile({ role, state, setPage, onLogout }) {
+  const user = getCurrentUser();
+  const email = user?.email || user?.username || '已登录用户';
+  const verified = role === 'student' ? state.verified : state.merchantStatus === 'verified';
+  const appCount = state.applications?.length || 0;
+  return <section className="form-page">
+    <div className="page-heading"><span>我的</span><h1>个人中心</h1></div>
+    <div className="profile-card">
+      <div className="profile-id">
+        <span className="profile-avatar"><CircleUserRound size={30}/></span>
+        <div><strong>{email}</strong><small>{role === 'student' ? '学生用户' : '商家用户'}</small></div>
+        <Status tone={verified ? 'green' : 'amber'}>{verified ? '已认证' : '未认证'}</Status>
+      </div>
+      <ul className="profile-list">
+        <li><button onClick={()=>setPage('verify')}><ShieldCheck size={18}/><span>身份认证</span><small>{verified ? '已通过' : '去认证'}</small><ChevronRight size={18}/></button></li>
+        {role === 'student' && <li><button onClick={()=>setPage('applications')}><FileText size={18}/><span>我的申请</span><small>{appCount} 条</small><ChevronRight size={18}/></button></li>}
+      </ul>
+      <button className="secondary full" onClick={onLogout}>退出登录</button>
+    </div>
+  </section>;
+}
+
 function AuthedApp({ session, onLogout }) {
   const [state, setState] = usePersistedState(session.uid);
   const [page, setPage] = useState('jobs');
   const update = fn => setState(fn);
   const role = session.role;
   return <Shell role={role} page={page} setPage={setPage} onLogout={onLogout}>
-    {role==='student' ? (page==='jobs'?<StudentHome state={state} update={update} setPage={setPage}/>:page==='applications'?<Applications state={state}/>:page==='verify'?<Verification role="student" state={state} update={update}/>:<Verification role="student" state={state} update={update}/>) : (page==='jobs'?<MerchantHome state={state} update={update} setPage={setPage}/>:page==='verify'?<Verification role="merchant" state={state} update={update}/>:<Applications state={{applications:[]}}/>)}
+    {role==='student' ? (page==='jobs'?<StudentHome state={state} update={update} setPage={setPage}/>:page==='applications'?<Applications state={state}/>:page==='verify'?<Verification role="student" state={state} update={update}/>:page==='profile'?<Profile role="student" state={state} setPage={setPage} onLogout={onLogout}/>:<StudentHome state={state} update={update} setPage={setPage}/>) : (page==='jobs'?<MerchantHome state={state} update={update} setPage={setPage}/>:page==='verify'?<Verification role="merchant" state={state} update={update}/>:<Applications state={{applications:[]}}/>)}
   </Shell>;
 }
 

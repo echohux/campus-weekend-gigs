@@ -7,3 +7,8 @@
 .filter-menu{position:absolute;z-index:30;top:calc(100% + 6px);left:0;min-width:100%;margin:0;padding:6px;list-style:none;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
 .filter-menu li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:9px 12px;border-radius:8px;white-space:nowrap;font-weight:600;color:var(--navy)}
 .filter-menu li:hover{background:var(--surface)}.filter-menu li.selected{color:var(--green-dark)}.filter-menu li .lucide{color:var(--green)}
+.profile-card{max-width:560px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;display:flex;flex-direction:column;gap:18px}
+.profile-id{display:flex;align-items:center;gap:14px}.profile-id>div{flex:1;display:flex;flex-direction:column}.profile-id strong{font-size:17px;word-break:break-all}.profile-id small{color:var(--muted)}
+.profile-avatar{width:52px;height:52px;flex:none;border-radius:50%;background:var(--green-soft);color:var(--green-dark);display:grid;place-items:center}
+.profile-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.profile-list button{width:100%;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:12px;background:#fff;font-weight:650}.profile-list button:hover{border-color:#9cafc5}.profile-list button>span{flex:1;text-align:left}.profile-list button>small{color:var(--muted);font-weight:600}
