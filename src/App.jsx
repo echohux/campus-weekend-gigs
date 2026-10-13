@@ -30,14 +30,6 @@ function readErr(e, fallback) {
 // 把相对资源路径拼上部署基路径，兼容 GitHub Pages 子路径（/campus-weekend-gigs/）
 const asset = p => import.meta.env.BASE_URL + p;
 
-// 两点经纬度直线距离（公里，Haversine）
-function haversineKm(lat1, lng1, lat2, lng2) {
-  const R = 6371, rad = d => d * Math.PI / 180;
-  const dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 function Brand() {
   return <div className="brand"><span className="brand-mark"><HeartHandshake size={26}/></span><span>周末搭子</span></div>;
 }
@@ -209,11 +201,12 @@ function StudentHome({ state, update, setPage }) {
   const located = !!coords;
   const origin = coords || CAMPUS;
 
-  // 以当前原点（用户位置或学校）实时计算每个岗位的直线距离
-  const sourceJobs = useMemo(() => seedJobs.map(j => {
-    const km = haversineKm(origin.lat, origin.lng, j.lat, j.lng);
-    return { ...j, distanceKm: Math.round(km * 10) / 10, distance: `${located ? '距我' : '距学校'} ${km.toFixed(1)} km` };
-  }), [origin.lat, origin.lng, located]);
+  // 以“你的位置”为中心展示附近岗位：距离沿用数据中的设定值（合理区间），
+  // 定位只切换“距学校/距我”的口径，避免固定远点坐标导致距离失真、列表被清空。
+  const sourceJobs = useMemo(() => seedJobs.map(j => ({
+    ...j,
+    distance: `${located ? '距我' : '距学校'} ${j.distanceKm.toFixed(1)} km`,
+  })), [located]);
 
   const jobs = useMemo(() => {
     let list = sourceJobs.filter(j => (j.title + j.merchant).includes(query));
@@ -245,7 +238,7 @@ function StudentHome({ state, update, setPage }) {
     <div className="search-box"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} aria-label="搜索岗位或商家" placeholder="搜索岗位或商家"/></div>
     <button type="button" className={`loc-bar ${located ? 'active' : ''}`} onClick={locate} disabled={locating}>
       <MapPin size={17}/>
-      <span>{locating ? '定位中…' : located ? `已按你的位置排序 · ${origin.lat.toFixed(4)}, ${origin.lng.toFixed(4)}` : '开启定位，优先显示离你最近的兼职'}</span>
+      <span>{locating ? '定位中…' : located ? `已以你的位置为中心 · ${origin.lat.toFixed(4)}, ${origin.lng.toFixed(4)}` : '开启定位，优先显示离你最近的兼职'}</span>
       {!located && !locating && <ChevronRight size={16}/>}
     </button>
     {geoError && <p className="form-error" role="alert">{geoError}</p>}
