@@ -5,7 +5,7 @@ import {
   GraduationCap, HeartHandshake, IdCard, LayoutList, MapPin, Search, ShieldCheck,
   Store, Upload, UsersRound, WalletCards, X
 } from 'lucide-react';
-import { seedJobs } from './data/jobs';
+import { seedJobs, CAMPUS } from './data/jobs';
 import { sendCode, loginOrRegister, logout, getCurrentUser } from './cloudbase';
 
 const defaults = { verified: false, applications: [], merchantStatus: 'pending', merchantJobs: [] };
@@ -29,6 +29,14 @@ function readErr(e, fallback) {
 
 // 把相对资源路径拼上部署基路径，兼容 GitHub Pages 子路径（/campus-weekend-gigs/）
 const asset = p => import.meta.env.BASE_URL + p;
+
+// 两点经纬度直线距离（公里，Haversine）
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371, rad = d => d * Math.PI / 180;
+  const dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 function Brand() {
   return <div className="brand"><span className="brand-mark"><HeartHandshake size={26}/></span><span>周末搭子</span></div>;
@@ -188,15 +196,27 @@ function FilterDropdown({ icon: Icon, value, options, onChange, active }) {
 }
 
 function StudentHome({ state, update, setPage }) {
-  const [selected, setSelected] = useState(seedJobs[0]);
+  const [selectedId, setSelectedId] = useState(seedJobs[0].id);
   const [query, setQuery] = useState('');
   const [day, setDay] = useState('本周末');
   const [distance, setDistance] = useState('不限距离');
   const [sort, setSort] = useState('距离优先');
   const [type, setType] = useState('全部类型');
+  const [coords, setCoords] = useState(null); // 用户授权后的真实位置
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState('');
+
+  const located = !!coords;
+  const origin = coords || CAMPUS;
+
+  // 以当前原点（用户位置或学校）实时计算每个岗位的直线距离
+  const sourceJobs = useMemo(() => seedJobs.map(j => {
+    const km = haversineKm(origin.lat, origin.lng, j.lat, j.lng);
+    return { ...j, distanceKm: Math.round(km * 10) / 10, distance: `${located ? '距我' : '距学校'} ${km.toFixed(1)} km` };
+  }), [origin.lat, origin.lng, located]);
 
   const jobs = useMemo(() => {
-    let list = seedJobs.filter(j => (j.title + j.merchant).includes(query));
+    let list = sourceJobs.filter(j => (j.title + j.merchant).includes(query));
     if (day !== '本周末') list = list.filter(j => j.day === day);
     if (type !== '全部类型') list = list.filter(j => j.type === type);
     const lim = distanceLimit[distance];
@@ -206,12 +226,29 @@ function StudentHome({ state, update, setPage }) {
       if (sort === '薪资从低到高') return a.pay - b.pay;
       return a.distanceKm - b.distanceKm;
     });
-  }, [query, day, distance, sort, type]);
+  }, [sourceJobs, query, day, distance, sort, type]);
 
+  const locate = () => {
+    if (!navigator.geolocation) { setGeoError('当前浏览器不支持定位'); return; }
+    setLocating(true); setGeoError('');
+    navigator.geolocation.getCurrentPosition(
+      pos => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocating(false); },
+      err => { setGeoError(err.code === 1 ? '定位权限被拒绝，可在浏览器地址栏重新授权' : '定位失败，请重试'); setLocating(false); },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
+  const selected = sourceJobs.find(j => j.id === selectedId) || sourceJobs[0];
   const applied = state.applications.includes(selected.id);
   return <>
     <div className="page-heading"><span>你好，同学</span><h1>这个周末，找份离你更近的工作</h1></div>
     <div className="search-box"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} aria-label="搜索岗位或商家" placeholder="搜索岗位或商家"/></div>
+    <button type="button" className={`loc-bar ${located ? 'active' : ''}`} onClick={locate} disabled={locating}>
+      <MapPin size={17}/>
+      <span>{locating ? '定位中…' : located ? `已按你的位置排序 · ${origin.lat.toFixed(4)}, ${origin.lng.toFixed(4)}` : '开启定位，优先显示离你最近的兼职'}</span>
+      {!located && !locating && <ChevronRight size={16}/>}
+    </button>
+    {geoError && <p className="form-error" role="alert">{geoError}</p>}
     <div className="filters">
       <FilterDropdown icon={CalendarDays} value={day} options={JOB_DAYS} onChange={setDay} active={day!=='本周末'}/>
       <FilterDropdown icon={MapPin} value={distance} options={DISTANCES} onChange={setDistance} active={distance!=='不限距离'}/>
@@ -219,7 +256,7 @@ function StudentHome({ state, update, setPage }) {
       <FilterDropdown icon={LayoutList} value={type} options={JOB_TYPES} onChange={setType} active={type!=='全部类型'}/>
     </div>
     <Notice verified={state.verified} role="student" onVerify={()=>setPage('verify')}/>
-    <div className="student-grid"><section className="job-list" aria-label="兼职列表">{jobs.map(j=><JobRow key={j.id} job={j} active={selected.id===j.id} onSelect={()=>setSelected(j)}/>)}{!jobs.length&&<div className="empty"><Search/><h2>没有找到相关岗位</h2><p>换个关键词或筛选条件试试看。</p></div>}</section><JobDetail job={selected} verified={state.verified} applied={applied} onApply={()=>update(s=>({...s,applications:[...s.applications,selected.id]}))}/></div>
+    <div className="student-grid"><section className="job-list" aria-label="兼职列表">{jobs.map(j=><JobRow key={j.id} job={j} active={selected.id===j.id} onSelect={()=>setSelectedId(j.id)}/>)}{!jobs.length&&<div className="empty"><Search/><h2>没有找到相关岗位</h2><p>换个关键词或筛选条件试试看。</p></div>}</section><JobDetail job={selected} verified={state.verified} applied={applied} onApply={()=>update(s=>({...s,applications:[...s.applications,selected.id]}))}/></div>
   </>;
 }
 
